@@ -578,6 +578,570 @@ db.orders.aggregate([
 
 
 
+### 2. 创建数据目录
+
+MongoDB 启动时将使用一个数据目录存放所有数据文件。我们将为3个复制集节点创建各自的数据目录。
+
+Linux/MacOS：
+
+```
+mkdir -p /data/db{1,2,3}
+```
+
+Windows：
+
+```
+md d:\data\db1
+md d:\data\db2
+md d:\data\db3
+```
+
+
+
+### 3. 准备配置文件
+
+复制集的每个 mongod 进程应该位于不同的服务器。我们现在在一台机器上运行3个进程，因此要为他们各自配置：
+
+- 不同的端口。实例中将使用28017/28018/28019,
+
+- 不同的数据目录。示例中将使用：
+
+  ```
+  /data/db1或c:\data\db1
+  /data/db2或c:\data\db2
+  /data/db3或c:\data\db3
+  ```
+
+- 不同的日志文件路径。示例中将使用：
+
+  ```
+  data/db1/mongod.log或c:\data\db1\mongod.log
+  data/db2/mongod.log或c:\data\db2\mongod.log
+  data/db3/mongod.log或c:\data\db3\mongod.log
+  ```
+
+  
+
+#### 配置文件
+
+Linux/MacOS：
+
+```yaml
+# /data/db1/mongod.conf
+systemLog:
+  destination: file
+  path: /data/db1/mongo.log # log path
+  logAppend: true
+storage:
+  dbPath: /data/db1 # data directory
+net:
+  bindIp: 0.0.0.0
+  port: 28017 # port
+replication:
+  replSetName: rs0
+processManagement:
+  fork: true
+```
+
+
+
+
+
+Windows：
+
+```yaml
+# c:\data\db1\mongod.conf
+systemLog:
+  destination: file
+  path: c:\data1\mongod.log # 日志文件路径
+  logAppend: true
+storage:
+  dbPath: c:\data1 # 数据目录
+net:
+  bindIp: 0.0.0.0
+  port: 28017 # 端口
+replication:
+  replSetName: rs0
+```
+
+
+
+### 4. 启动 MongoDB 进程
+
+Linux/MacOS：
+
+```
+mongod -f db1/mongod.conf
+mongod -f db2/mongod.conf
+mongod -f db3/mongod.conf
+```
+
+注意：如果启用了SELInux，可能阻止上述进程启动。简单起见请关闭SELinux。
+
+Windows：
+
+```
+mongod -f c:\data1\mongod.conf
+mongod -f c:\data2\mongod.conf
+mongod -f c:\data3\mongod.conf
+```
+
+因为 Windows 不支持 fork，以上命令需要在3个不同的窗口执行，执行后不可关闭，否则进程将直接结束。
+
+
+
+### 5. 配置复制集
+
+方法1
+
+```
+# mongo --port 28017
+rs.initiate()
+rs.add("HOSTNAME:28018")
+rs.add("HOSTNAME:28019")
+```
+
+注意：此方式 hostname 需要能被解析
+
+方法2：
+
+```
+
+# mongo -- port 28017
+rs.initiate({
+    _id: "rs0",
+    members: [{
+        _id: 0,
+        host: "localhost:28017"
+    }, {
+        _id: 1,
+        host: "localhost:28018"
+    }, {
+        _id: 2,
+        host: "localhost:28019"
+    }]
+})
+```
+
+
+
+
+
+###  6. 验证
+
+MongoDB 主节点进行写入
+
+```sql
+# mongo localhost:28017
+db.test.insert({ a: 1})
+
+db.test.insert({ a: 1})
+```
+
+
+
+MongoDB 从节点进行读
+
+```sql
+# mongo localhost:28018
+rs.slaveOk()
+db.test.find()
+```
+
+
+
+![image-20230102115632611](D:/程序/Typora图片存放地/images/image-20230102115632611.png)
+
+
+
+# MongoDB 全家桶
+
+
+
+| 软件模块                  | 描述                                              |
+| ------------------------- | ------------------------------------------------- |
+| mongod                    | MongoDB 数据库软件                                |
+| mongo                     | MongoDB 命令行工具，管理 MongoDB 数据库           |
+| mongos                    | MongoDB 路由进程，分片环境下使用                  |
+| mongodump / mongorestore  | 命令行数据库备份与恢复工具                        |
+| mongoexport / mongoimport | CSV / JSON 导入与导出，主要用于不同系统同数据迁移 |
+| Compass                   | MongoDB GUI 管理工具                              |
+| Ops Manager(企业版)       | MongoDB 集群管理软件                              |
+| BI Connector(企业版)      | SQL 解释器 / BI 套接件                            |
+| MongoDB Charts(企业版)    | MongoDB 可视化软件                                |
+| Atlas(付费及免费)         | MongoDB 云托管服务，包括永久免费云数据库          |
+
+
+
+## mongodump . mongorestore
+
+- 类似于 MySQL 的 dump/restore 工具
+- 可以完成全库 dump: 不加条件
+- 也可以根据条件 dump 部分数据： -q 参数
+- Dump 的同时跟踪数据就更：--oplog
+- Restore 是反操作，把 mongodump 的输出导入到 mongodb
+
+```sql
+mongodump -h 127.0.0.1:27017 -d test -c test
+
+mongorestore -h 127.0.0.1:27017 -d test -c test xxx.bson
+```
+
+
+
+
+
+## Atlas - MongoDB 公有云托管服务
+
+![image-20230102122120368](D:/程序/Typora图片存放地/images/image-20230102122120368.png)
+
+
+
+## MongoDB BI Connector
+
+![image-20230102122503258](D:/程序/Typora图片存放地/images/image-20230102122503258.png)
+
+端口和 MySQL 一样。
+
+**不支持写入，它的目的不是用 SQL 取代 MQL，这不是它的初衷**
+
+
+
+## MongoDB Ops Manager - 集群管理平台
+
+![image-20230102122711605](D:/程序/Typora图片存放地/images/image-20230102122711605.png)
+
+
+
+分片集群的备份只能用这个软件，用Java写的。
+
+
+
+# 从熟练到精通
+
+## 数据模型
+
+什么是数据模型？
+
+数据模型是一组由符号、文字组成的集合，用以准确表达信息，达到有效交流、沟通的目的。
+
+Steve Hoberman 霍伯曼.数据建模经典教程
+
+
+
+### 数据模型设计的元素
+
+实体 Entity
+
+- 描述业务的主要数据集合
+- 谁，什么，何时，何地，为何，如何
+
+属性 Attribute
+
+- 描述实体里面的单个信息
+
+关系 Relationship
+
+- 描述实体与实体之间的数据规则
+- 结构规则：1~N，N~1，N~N
+- 引用规则：电话号码不能单独存在
+
+![image-20230102161021033](D:/程序/Typora图片存放地/images/image-20230102161021033.png)
+
+
+
+
+
+### 传统模型设计：从概念到逻辑到物理
+
+
+
+
+
+|            | 概念模型 CDM                                       | 逻辑模型 LDM                                     | 物理模型 PDM                                                 |
+| ---------- | -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| 目的       | 描述业务系统要管理的对象                           | 基于概念模型，详细列出所有实体、实体的属性及关系 | 根据逻辑模型，结合数据库的物理结构，设计具体的表结构，字段列表及主外键 |
+| 特点       | 用概念名词来描述现实中的实体及业务规则，如"联系人" | 基于业务的描述和数据库无关                       | 技术实现细节和具体的数据库类型相关                           |
+| 主要使用这 | 用户需求分析师                                     | 需求分析师架构师及开发者                         | 开发者DBA                                                    |
+
+
+
+**从开发者的视角：概念模型**
+
+![image-20230102162312487](D:/程序/Typora图片存放地/images/image-20230102162312487.png)
+
+
+
+
+
+**从开发者的视角：逻辑模型**
+
+![image-20230102162353010](D:/程序/Typora图片存放地/images/image-20230102162353010.png)
+
+
+
+**从开发者的视角：第三范式下的物理模型**
+
+![image-20230102163252598](D:/程序/Typora图片存放地/images/image-20230102163252598.png)
+
+
+
+## MongoDB 文档模型设计的三个误区
+
+1. **不需要模型设计**
+2. **MongoDB 应该用一个超级大文档来组织所有数据**
+3. **MongoDB 不支持关联或事务**
+
+**上述陈述都不正确！！！**
+
+
+
+### 关于文档 JSON 文档模型设计
+
+文档模型设计处于是物理模型设计阶段(PDM)
+
+JSON 文档模型通过内嵌数组或引用字段来表示关系
+
+文档模型设计不遵从第三范式，允许冗余。
+
+![image-20230102163753166](D:/程序/Typora图片存放地/images/image-20230102163753166.png)
+
+
+
+### 为什么人们都说 MongoDB 是无模式？
+
+严格来说，MongoDB 同样需要概念 / 逻辑建模
+
+文档模型设计的物理层结构可以和逻辑层类似
+
+**MongoDB 无模式由来：**
+
+- **可以省略物理建模的具体过程**
+
+![image-20230102164102754](D:/程序/Typora图片存放地/images/image-20230102164102754.png)
+
+
+
+### 逻辑模型 - JSON 模型
+
+![image-20230102164350132](D:/程序/Typora图片存放地/images/image-20230102164350132.png)
+
+
+
+### 文档模型的设计原则：性能和易用
+
+![image-20230102164537499](D:/程序/Typora图片存放地/images/image-20230102164537499.png)
+
+
+
+## 关系模型 vs 文档模型
+
+
+
+|              | 关系数据库                       | JSON 文档模型        |
+| ------------ | -------------------------------- | -------------------- |
+| 模型设计层次 | 概念模型<br>逻辑模型<br>物理模型 | 概念模型<br>逻辑模型 |
+| 模型实体     | 表                               | 集合                 |
+| 模型属性     | 列                               | 字段                 |
+| 模型关系     | 关联关系，主外键                 | 内嵌数组，引用字段   |
+
+
+
+
+
+## MongoDB 文档模型设计三部曲
+
+![image-20230102165226708](D:/程序/Typora图片存放地/images/image-20230102165226708.png)
+
+
+
+### 第一步：建立基础文档模型
+
+1. 根据概念模型或者业务需求推到出逻辑模型 - 找到对象
+2. 列出实体之间的关系(及基数) - 明确关系
+3. 套用逻辑设计原则来决定内嵌方式 - 机型建模
+4. 完成基础模型构建
+
+![image-20230102165542103](D:/程序/Typora图片存放地/images/image-20230102165542103.png)
+
+
+
+#### 一个联系人管理应用的例子
+
+1. **找到对象**
+   - Contacts
+   - Groups
+   - Address
+   - Portraits
+
+2. **确定关系**
+   - 一个联系人由一个头像 **(1-1)**
+   - 一个联系人可以有多个地址 **(1-N)**
+   - 一个联系人可以属于多个组，一个组可以有多个联系人 **(N-N)**
+
+![image-20230102170058295](D:/程序/Typora图片存放地/images/image-20230102170058295.png)
+
+
+
+**1-1 关系建模：portraits**
+
+**基本原则：**
+
+- 一对一关系以内嵌为主
+- 作为子文档形式或者直接在顶级不涉及到数据冗余
+
+**例外情况：**
+
+- 如果内嵌后导致文档大小超过16MB
+
+**一个文档最多有16MB**
+
+**MongoDB 支持二进制文件内容直接放入到 JSON 文档中，不需要任何处理**
+
+![image-20230102171004413](D:/程序/Typora图片存放地/images/image-20230102171004413.png)
+
+**1-N 关系建模：Addresses**
+
+**基本原则：**
+
+- 一对多关系同样以内嵌为主
+- 用数据来表示一对多不涉及到数据冗余
+
+**例外情况：**
+
+- 内嵌后导致文档大小超过16MB
+- 数组长度太大(数万或更多)
+- 数组长度不确定
+
+![image-20230102171023870](D:/程序/Typora图片存放地/images/image-20230102171023870.png)
+
+**N-N 关系建模：内嵌数组模式**
+
+**基本原则：**
+
+- 不需要映射表
+- 一遍用内嵌数组表示一对多
+- 通过冗余来实现N-N
+
+**例外情况：**
+
+- 内嵌后导致文档大小超过16MB
+- 数组长度太大(数万或更多)
+- 数组长度不确定
+
+![image-20230102171419415](D:/程序/Typora图片存放地/images/image-20230102171419415.png)
+
+
+
+### 第二补：根据读写工况细化
+
+![image-20230102172024808](D:/程序/Typora图片存放地/images/image-20230102172024808.png)
+
+- 最频繁的数据查询模式
+- 最常用的查询参数
+- 最频繁的数据写入模式
+- 读写操作的比例
+- 数据量的大小
+
+
+
+> **基于内嵌的文档模型<br>根据业务需求，<br>	使用引用来避免性能瓶颈<br>	使用冗余来优化访问性能**
+
+
+
+#### 联系人管理应用的分组需求
+
+1. 用于客户营销
+2. 有千万级联系人
+3. 需要频繁变动分组(group)<br>的信息，如增加分组及修改名称<br>及描述以及营销状态
+4. 一个分组可以有百万级联系人
+
+![image-20230102173000649](D:/程序/Typora图片存放地/images/image-20230102173000649.png)
+
+
+
+**解决方案：Group 使用单独的集合**
+
+1. 类似于关系型设计
+2. 用 id 或者唯一键关联
+3. 使用 $lookup 来提供一次查询多表<br>的能力(类似关联)
+
+![image-20230102173223818](D:/程序/Typora图片存放地/images/image-20230102173223818.png)
+
+
+
+**引用模式下的关联查询**
+
+![image-20230102173402638](D:/程序/Typora图片存放地/images/image-20230102173402638.png)
+
+
+
+
+
+#### 联系人的头像：引用模式
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

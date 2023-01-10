@@ -1403,6 +1403,164 @@ db.test.insert({count: 1}, {writeConcern: {w: 3, wtimeout: 3000}})
 
 
 
+### 读操作事务
+
+**综述**
+
+在读取数据的过程中我们需要关注一下两个问题：
+
+- 从哪里读？关注数据节点 位置
+- 什么样的数据可以读？关注数据的隔离性
+
+第一个问题是是由 readPreference 来解决
+
+第二个问题则是由 readConcern 来解决
+
+
+
+#### 什么是 readPreference？
+
+readPreference 决定使用哪一个节点来满足正在发起的读请求。可选值包括：
+
+- primary：只选择主节点**(默认)**;
+- primaryPreferred：优先选择朱姐带你，如果不可用则选择从节点;
+- secondary：只选择节点;
+- secondaryPreferred：优先选择从节点，如果从节点不可用则选择主节点;
+- nearest：选择最近的节点;
+
+![image-20230110213043340](D:/程序/Typora图片存放地/images/image-20230110213043340.png)
+
+
+
+
+
+#### readPreference 场景举例
+
+- 用户下订单后马上将用户转到订单详情页——primary/primaryPreferred。因为此时从节点可能还没有复制到新订单;
+- 用户从查询自己下过的订单——secondary/secondaryPreferred。查询历史订单对时效性通常没有太高需求;
+- 生成报表——secondary。报表对时效性要求不高，但资源需求大，可以在从节点单独处理，避免对线上用户造成影响;
+- 将用户上传的图片分发到全世界，让各地用户能够就近读取——nearest。每个地区的应用选择最近的节点读取数据。
+
+
+
+#### readPreference 与 Tag
+
+readPreference 只能控制使用一类节点。Tag 则可以将节点选择控制到一个或几个节点。考虑一下场景：
+
+- 一个 5 个节点的复制集;
+- 3 个节点硬件较好，专用于服务线上客户;
+- 2 个节点硬件较差，专用于生成报表;
+
+可以使用 Tag 来达到这样的控制目的：
+
+- 为 3 个较好的节点打上 {purpose: "online"};
+- 为 2 个交叉的节点打上 {purpose: "analyse"};
+- 在线应用读取时指定 online，报表读取时指定 reporting。
+
+更多信息请参考文档：
+
+![image-20230110214728768](D:/程序/Typora图片存放地/images/image-20230110214728768.png)
+
+
+
+#### readPreference 配置
+
+**通过 MongoDB 的连接串参数：**
+
+- mongodb://host1:27017,host2:27017,host3:27017/?replicaSet=rs&readPreference=secondary
+
+
+
+**通过 MongoDB 驱动程序 API：**
+
+- MongoCollection.withReadPreference(ReadPreference readPref)
+
+
+
+**Mongo Shell：**
+
+- db.collection.find({}).readPref("secondary")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
